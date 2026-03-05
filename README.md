@@ -15,11 +15,24 @@ Setup completo para usar a BC-250 como PC de gaming headless via Moonlight/Sunsh
 
 ## 1. Instalar CachyOS
 
-Instalar normalmente pelo ISO padrão. Verificar kernel compatível:
+Instalar normalmente pelo ISO padrão.
+
+### Compatibilidade de kernels
+
+| Kernel | Status | Notas |
+|--------|--------|-------|
+| 6.10.x | ⚠️ Funciona | `amdgpu.sg_display=0` obrigatório |
+| 6.11.x–6.14.x LTS | ✅ Bom | Estável |
+| **6.15.0–6.15.6** | ❌ **Quebrado** | GPU init falha / kernel panic |
+| 6.15.7–6.17.7 | ✅ **Recomendado** | Melhor suporte |
+| **6.17.8–6.17.10** | ❌ **Quebrado** | Driver GPU quebrado |
+| 6.17.11+ | ✅ **Recomendado** | Fix aplicado |
 
 ```bash
-uname -r  # 6.12-6.14 LTS ou 6.15.7-6.17.7 recomendado
+uname -r  # verificar versão atual
 ```
+
+> ⚠️ **NUNCA use `amd_iommu=on`** — IOMMU está quebrado na BC-250 e causa travamentos e falhas de display.
 
 ### Pacotes essenciais
 
@@ -41,6 +54,8 @@ O CachyOS já pode ter o `cyan-skillfish-governor-smu` disponível:
 sudo pacman -S cyan-skillfish-governor-smu  # ou instalar via AUR
 sudo systemctl enable --now cyan-skillfish-governor-smu
 ```
+
+> **Nota CachyOS**: o governor pode não iniciar no boot mesmo habilitado. Comportamento normal — funciona corretamente após abrir qualquer jogo pela primeira vez.
 
 ### Configuração (`/etc/cyan-skillfish-governor-smu/config.toml`)
 
@@ -131,10 +146,15 @@ Configurar UMA Frame Buffer Size para **512 MB** (modo dinâmico). A GPU aloca m
 
 ```bash
 # /etc/modprobe.d/amdgpu-mem.conf
-options amdgpu no_system_mem_limit=1 gttsize=14336
+options amdgpu no_system_mem_limit=1 gttsize=14750
 
 # /etc/modprobe.d/ttm-mem-limit.conf
-options ttm pages_limit=4194304 page_pool_size=4194304
+options ttm pages_limit=3776000 page_pool_size=3776000
+```
+
+Ou via kernel parameters (alternativo ao modprobe):
+```
+amdgpu.gttsize=14750 ttm.pages_limit=3776000 ttm.page_pool_size=3776000
 ```
 
 Rebuild initramfs:
@@ -178,7 +198,7 @@ MESA_LOADER_DRIVER_OVERRIDE=zink
 AMD_OVERRIDE_DEVICE_ID=0x731F
 ```
 
->  desativa HIZ (problemático na BC-250).  previne crashes em jogos com compute shaders pesados.  faz o Vulkan/DXVK identificar como Navi10.
+> `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F` faz o Vulkan/DXVK identificar como Navi10.
 
 ### Unified heap (`/etc/drirc`)
 
@@ -198,7 +218,7 @@ AMD_OVERRIDE_DEVICE_ID=0x731F
 quiet mitigations=off amdgpu.sg_display=0
 ```
 
-> `amdgpu.sg_display=0` — corrige hangs de display na inicialização (raro, mas ocorre em algumas configurações)
+> `amdgpu.sg_display=0` — só obrigatório em kernels < 6.10. Em kernels modernos é opcional mas inofensivo. `mitigations=off` dá +10-18 FPS (desativa mitigações Spectre/Meltdown — só usar em sistema dedicado a gaming).
 
 ---
 
@@ -696,6 +716,82 @@ sudo systemctl enable --now earlyoom
 ```
 
 Config padrão já funciona bem. Vai matar o processo que estiver comendo mais memória quando o sistema chegar a ~5% de RAM livre.
+
+---
+
+## 14. Compatibilidade de Jogos e Performance
+
+### Performance esperada
+
+Equivalente a uma **RX 6600** para rasterização. ~70-80% da performance de um PS5.
+
+| Resolução | Settings | FPS esperado |
+|-----------|----------|-------------|
+| 1080p High | Sem RT | 60–100+ |
+| 1080p Medium | Sem RT | 80–120+ |
+| 1080p + RT | Lighting only | 30–60 |
+| 1440p + FSR | Qualidade | Jogável na maioria |
+
+### Jogos testados
+
+| Jogo | FPS | Config | Notas |
+|------|-----|--------|-------|
+| Cyberpunk 2077 | 70–90 | 1080p High + FSR | +18 FPS com `mitigations=off` |
+| Cyberpunk 2077 | 50–60 | 1080p High + FSR + RT | RT lighting only |
+| Cyberpunk 2077 | 100+ | 1080p Ultra + FSR 3.1 | |
+| The Last of Us Part I | 60 | 1080p Medium-High | 90–100°C na compilação de shaders |
+| Control | 40 | 1080p + RT full | |
+| Devil May Cry 5 | 100+ | 1080p High | Excelente otimização |
+| Detroit: Become Human | 60 | 1080p Medium | Travado em 60 |
+| Red Dead Redemption 2 | 45+ | Benchmark | Usar `-useMaximumSettings` |
+| CS2 | 100+ | 1080p | Alta latência GDDR6 pode afetar |
+| Portal RTX | 40 | 720p | RT real (Mesa 25.2+) |
+| Tears of the Kingdom (Ryujinx) | 20 | — | Limitação da placa nesse jogo |
+
+### Jogos incompatíveis (limitação de hardware)
+
+- **FF7 Rebirth** — requer mesh shaders (não suportado no GFX1013)
+- **Doom: The Dark Ages** — requer Vulkan Fragment Shading Rate
+- **Fortnite** — Easy Anti-Cheat não suporta Linux
+
+### Steam Launch Options recomendadas
+
+```bash
+# Básico
+RADV_DEBUG=nohiz %command%
+
+# Com overlay
+RADV_DEBUG=nohiz mangohud gamemoderun %command%
+```
+
+### Company of Heroes 3
+
+Requer VRAM split de pelo menos 4 GB (512 MB causa artefatos/crashes).
+
+---
+
+## 15. LLM Inference (llama.cpp via Vulkan)
+
+A BC-250 roda modelos de linguagem via backend Vulkan do llama.cpp — sem ROCm (experimental e com problemas).
+
+```bash
+# Baixar binário pré-compilado com Vulkan
+wget https://github.com/ggerganov/llama.cpp/releases/latest/download/llama-*-bin-ubuntu-vulkan-x64.zip
+unzip llama-*.zip && cd build/bin
+
+# Variável necessária para evitar OOM em alocações grandes
+export GGML_VK_FORCE_MAX_ALLOCATION_SIZE=2000000000  # 2GB por chunk
+
+# Rodar servidor
+./llama-server --model /caminho/modelo.gguf --gpu-layers 99
+```
+
+**Performance esperada:**
+- Modelo 8B quantizado (Q4): ~60 tokens/seg
+- VRAM visível pelo Vulkan: ~10 GB (dos 16 GB totais — limitação conhecida)
+- Modelos 70B+: provável OOM mesmo quantizados
+
+**ROCm:** Suporte experimental e incompleto para GFX1013 — `rocBLAS` não tem kernels pré-compilados para essa arquitetura. Usar Vulkan.
 
 ---
 
