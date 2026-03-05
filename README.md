@@ -9,7 +9,7 @@ Setup completo para usar a BC-250 como PC de gaming headless via Moonlight/Sunsh
 - **VRAM**: 512 MB dedicada + GTT dinâmico (até 14 GB)
 - **Disco**: NVMe 477 GB
 - **OS**: CachyOS Linux (Arch-based)
-- **VCN**: Reportado como habilitado a partir de Mesa 25.1 + kernel 6.11 (H.264/H.265/VP9). **Não verificado** — ver seção de testes abaixo
+- **VCN**: Desabilitado — firmware bloqueado pela Sony. Sem hardware encode/decode. CPU only
 
 ---
 
@@ -333,7 +333,7 @@ sw_preset = ultrafast
 sw_tune = zerolatency
 ```
 
-> `encoder = software` (libx264) é a opção segura e confirmada. Hardware encoding (VCN) pode funcionar com Mesa 25.1 + kernel 6.11 — ver seção de testes. O preset `ultrafast` usa ~40% CPU durante stream. Para melhor qualidade com mais CPU, use `superfast` (~55%) ou `faster`.
+> Sem VCN: A BC-250 não tem hardware de encoding (firmware bloqueado pela Sony). `encoder = software` (libx264) é a única opção. O preset `ultrafast` usa ~40% CPU durante stream. Para melhor qualidade com mais CPU, use `superfast` (~55%) ou `faster`.
 
 ### Habilitar serviços
 
@@ -755,37 +755,7 @@ systemctl status earlyoom
 
 ---
 
-## Testes não verificados
-
-Funcionalidades reportadas pela comunidade mas **não confirmadas** neste hardware. Contribuições bem-vindas.
-
-### VCN — Hardware decode/encode
-
-Reportado como funcional a partir de **Mesa 25.1 + kernel 6.11**. Suporte a H.264, H.265 e VP9 decode; H.264 e H.265 encode.
-
-```bash
-# Verificar se VCN aparece nos logs do kernel
-dmesg | grep -i vcn
-
-# Checar VA-API
-vainfo 2>&1
-
-# Esperado se funcionar:
-# vainfo: VA-API version: 1.x
-# VAEntrypointVLD   (decode)
-# VAEntrypointEncSlice (encode)
-
-# Testar decode com hardware
-ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128   -i input.mp4 -f null - 2>&1 | grep -i "vaapi\|vcn\|error"
-
-# Testar encode com hardware
-ffmpeg -vaapi_device /dev/dri/renderD128 -i input.mp4   -vf 'format=nv12,hwupload' -c:v h264_vaapi output.mp4
-```
-
-Se funcionar, atualizar `encoder` no `sunshine.conf` para `vaapi` e remover o aviso de VCN desta seção.
-
----
-
+## Referências
 ## Referências
 
 - [AMD BC-250 Docs](https://elektricm.github.io/amd-bc250-docs/)
