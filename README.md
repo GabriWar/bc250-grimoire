@@ -561,6 +561,71 @@ sudo systemctl start cyan-skillfish-governor-smu
 
 ---
 
+## 12. Overclock da CPU (SMU)
+
+A CPU stock roda a 3500 MHz. Com o tool `bc250-smu-oc` é possível subir via SMU.
+
+### Instalar
+
+```bash
+sudo pacman -S pipx
+pipx ensurepath
+git clone https://github.com/bc250-collective/bc250_smu_oc
+cd bc250_smu_oc
+pipx install .
+```
+
+### Testar (não persiste)
+
+```bash
+# Testar 3800 MHz @ 1150 mV
+bc250-detect --frequency 3800 --vid 1150
+
+# Ajustar em steps de 100 MHz e 25 mV pra achar o sweet spot
+```
+
+### Aplicar (persiste até reboot)
+
+```bash
+# Adicionar -k pra manter após o teste
+bc250-detect --frequency 3800 --vid 1150 -k
+```
+
+### Aplicar no boot
+
+```bash
+# Após encontrar valores estáveis, salvar config e habilitar serviço
+bc250-apply --install overclock.conf
+sudo systemctl enable --now bc250-smu-oc
+```
+
+### Configuração atual (`/etc/bc250-smu-oc.conf`)
+
+```ini
+[overclock]
+frequency = 3800
+scale = -29
+max_temperature = 95
+```
+
+### Voltar ao stock (3500 MHz)
+
+```bash
+sudo systemctl stop bc250-smu-oc
+sudo systemctl disable bc250-smu-oc
+# Reboot pra resetar
+```
+
+### Regras de segurança
+
+- **Nunca exceder 1300 mV** — pode danificar a CPU
+- **Cada chip é diferente** — valores ótimos variam entre placas
+- **Manter temperatura abaixo de 85°C** em jogos antes de fazer OC
+- Testar com stress por pelo menos 5 minutos antes de aplicar permanente
+- Ajustar em steps de 100 MHz (freq) e 25 mV (voltagem)
+
+---
+
 ## Checklist de verificação
 
 ```bash
