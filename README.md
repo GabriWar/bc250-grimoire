@@ -149,12 +149,12 @@ Configurar UMA Frame Buffer Size para **512 MB** (modo dinâmico). A GPU aloca m
 options amdgpu no_system_mem_limit=1 gttsize=14750
 
 # /etc/modprobe.d/ttm-mem-limit.conf
-options ttm pages_limit=3776000 page_pool_size=3776000
+options ttm pages_limit=4194304 page_pool_size=4194304
 ```
 
 Ou via kernel parameters (alternativo ao modprobe):
 ```
-amdgpu.gttsize=14750 ttm.pages_limit=3776000 ttm.page_pool_size=3776000
+amdgpu.gttsize=14750 ttm.pages_limit=4194304 ttm.page_pool_size=4194304
 ```
 
 Rebuild initramfs:
