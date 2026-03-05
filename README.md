@@ -142,6 +142,8 @@ Rebuild initramfs:
 sudo mkinitcpio -P
 ```
 
+> **Opcional** — pode causar instabilidade em alguns casos. Testar e reverter se necessário (remover o arquivo e limpar `/etc/environment`).
+
 Verificar após reboot:
 ```bash
 vulkaninfo 2>&1 | grep -A3 "memoryHeaps\[0\]"
@@ -152,13 +154,31 @@ vulkaninfo 2>&1 | grep -A3 "memoryHeaps\[0\]"
 
 ## 4. RADV e Performance
 
+### Navi10 Spoof (fix de detecção de GPU) — Opcional
+
+A BC-250 (GFX1013 / Cyan Skillfish) não é reconhecida por muitos jogos e pelo DXVK. O spoof faz ela se identificar como Navi10 (RX 5700 XT).
+
+```bash
+sudo mkdir -p /etc/drirc.d
+sudo cp config/99-bc250-navi10.conf /etc/drirc.d/99-bc250-navi10.conf
+```
+
+Verificar após reboot:
+```bash
+vulkaninfo | grep deviceID   # esperado: 0x731F (Navi10)
+glxinfo | grep -i device
+```
+
 ### Variáveis de ambiente (`/etc/environment`)
 
 ```
 AMD_VULKAN_ICD=RADV
-RADV_DEBUG=nohiz
+RADV_DEBUG=nohiz,nocompute
 MESA_LOADER_DRIVER_OVERRIDE=zink
+AMD_OVERRIDE_DEVICE_ID=0x731F
 ```
+
+>  desativa HIZ (problemático na BC-250).  previne crashes em jogos com compute shaders pesados.  faz o Vulkan/DXVK identificar como Navi10.
 
 ### Unified heap (`/etc/drirc`)
 
