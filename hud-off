@@ -1,0 +1,6 @@
+#!/bin/sh
+mkdir -p ~/.config/MangoHud
+cat > ~/.config/MangoHud/MangoHud.conf << 'EOF'
+no_display
+EOF
+echo "HUD OFF"

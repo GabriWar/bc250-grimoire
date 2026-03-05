@@ -1,0 +1,3 @@
+#!/bin/sh
+systemctl --user start labwc-headless.service
+echo "Stream ON"

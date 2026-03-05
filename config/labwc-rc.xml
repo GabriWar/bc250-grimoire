@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <keyboard>
+    <!-- Terminal -->
+    <keybind key="C-A-e">
+      <action name="Execute" command="foot"/>
+    </keybind>
+    <!-- Launcher -->
+    <keybind key="C-A-r">
+      <action name="Execute" command="fuzzel"/>
+    </keybind>
+    <!-- Fechar janela -->
+    <keybind key="C-A-q">
+      <action name="Close"/>
+    </keybind>
+    <!-- Fullscreen -->
+    <keybind key="C-A-f">
+      <action name="ToggleFullscreen"/>
+    </keybind>
+    <!-- Alt-Tab -->
+    <keybind key="A-Tab">
+      <action name="NextWindow"/>
+    </keybind>
+  </keyboard>
+  <theme>
+    <name>Clearlooks-3.4</name>
+  </theme>
+</labwc_config>

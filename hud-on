@@ -1,0 +1,15 @@
+#!/bin/sh
+mkdir -p ~/.config/MangoHud
+cat > ~/.config/MangoHud/MangoHud.conf << 'EOF'
+gpu_temp
+cpu_temp
+gpu_power
+ram
+vram
+fps
+frametime=0
+frame_timing=1
+position=top-left
+font_size=24
+EOF
+echo "HUD ON"
