@@ -626,6 +626,50 @@ sudo systemctl disable bc250-smu-oc
 
 ---
 
+## 13. Resiliência e Auto-Recovery
+
+Por padrão o CachyOS trava para sempre em kernel panic. Essas configs garantem que o sistema sempre reinicia sozinho.
+
+### Kernel panic → reboot automático
+
+```bash
+# /etc/sysctl.d/99-resilience.conf
+sudo cp config/99-resilience.conf /etc/sysctl.d/99-resilience.conf
+sudo sysctl -p /etc/sysctl.d/99-resilience.conf
+```
+
+O arquivo configura:
+- `kernel.panic = 10` — reboot 10s após kernel panic (driver AMD crashou, etc.)
+- `kernel.panic_on_oops = 1` — trata kernel oops como panic (evita sistema "meio vivo")
+- `kernel.hung_task_panic = 1` — reboot se processo do kernel travar por 120s
+
+### systemd watchdog
+
+Reinicia o sistema se o próprio systemd travar:
+
+```bash
+# /etc/systemd/system.conf — adicionar/descomentar:
+RuntimeWatchdogSec=30
+RebootWatchdogSec=10min
+```
+
+```bash
+sudo systemctl daemon-reexec
+```
+
+### earlyoom (OOM killer antes do colapso)
+
+O OOM killer padrão age tarde demais. `earlyoom` age quando ainda há memória suficiente pro kernel funcionar, matando o processo mais pesado (ex: ComfyUI) antes de travar tudo:
+
+```bash
+sudo pacman -S earlyoom
+sudo systemctl enable --now earlyoom
+```
+
+Config padrão já funciona bem. Vai matar o processo que estiver comendo mais memória quando o sistema chegar a ~5% de RAM livre.
+
+---
+
 ## Checklist de verificação
 
 ```bash
@@ -660,6 +704,11 @@ systemctl --user status pipewire
 
 # Seat
 systemctl status seatd
+
+# Resiliência
+sysctl kernel.panic          # deve ser 10
+sysctl kernel.panic_on_oops  # deve ser 1
+systemctl status earlyoom
 ```
 
 ---
