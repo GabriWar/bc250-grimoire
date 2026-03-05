@@ -1,27 +1,46 @@
 #!/bin/sh
-# Uso: screen-on [resolução] [output]
-# Exemplos:
-#   screen-on
-#   screen-on 1920x1080@60
-#   screen-on 2560x1440@60 HDMI-A-1
-#   screen-on 1280x720@60 DP-1
-#
-# Ver outputs disponíveis: WAYLAND_DISPLAY=wayland-0 wlr-randr
+# Uso:
+#   screen-on list                                     # listar outputs e resoluções disponíveis
+#   screen-on                                          # primeiro output, 1920x1080@60
+#   screen-on 1920x1080@60                             # primeiro output, resolução específica
+#   screen-on 1920x1080@60 HDMI-A-1                   # output específico
+#   screen-on 1920x1080@60 HDMI-A-1 2560x1440@60 DP-1 # múltiplos outputs
 
-RES=${1:-1920x1080@60}
+if [ "$1" = "list" ]; then
+    systemctl --user is-active labwc-screen.service >/dev/null 2>&1 || {
+        echo "Compositor não está rodando. Iniciando temporariamente..."
+        systemctl --user start labwc-screen.service
+        sleep 1
+    }
+    WAYLAND_DISPLAY=wayland-0 wlr-randr
+    exit 0
+fi
 
 systemctl --user stop labwc-headless.service 2>/dev/null
 systemctl --user start labwc-screen.service
 sleep 1
 
-if [ -n "$2" ]; then
-    WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$2" --mode "$RES"
-else
-    # Detecta o primeiro output disponível automaticamente
+if [ -z "$1" ]; then
+    # Sem args: primeiro output detectado, resolução padrão
     OUTPUT=$(WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
-    if [ -n "$OUTPUT" ]; then
-        WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUTPUT" --mode "$RES"
-    fi
+    [ -n "$OUTPUT" ] && WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUTPUT" --mode 1920x1080@60
+    echo "Screen ON (1920x1080@60 @ $OUTPUT)"
+else
+    # Parsear pares de resolução+output: res1 out1 res2 out2 ...
+    RES=""
+    while [ -n "$1" ]; do
+        RES="$1"
+        OUT="$2"
+        if [ -z "$OUT" ] || echo "$OUT" | grep -qE '^[0-9]'; then
+            # Sem output especificado, usa o primeiro disponível
+            OUT=$(WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
+            WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUT" --mode "$RES"
+            echo "Screen ON ($RES @ $OUT)"
+            break
+        else
+            WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUT" --mode "$RES"
+            echo "Screen ON ($RES @ $OUT)"
+            shift 2
+        fi
+    done
 fi
-
-echo "Screen ON ($RES)"
