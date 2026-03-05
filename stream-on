@@ -1,3 +1,15 @@
 #!/bin/sh
+# Uso: stream-on [resolução]
+# Exemplos:
+#   stream-on
+#   stream-on 1920x1080@60
+#   stream-on 2560x1440@60
+#   stream-on 1280x720@60
+
+RES=${1:-1920x1080@60}
+
+systemctl --user stop labwc-screen.service 2>/dev/null
 systemctl --user start labwc-headless.service
-echo "Stream ON"
+sleep 1
+WAYLAND_DISPLAY=wayland-0 wlr-randr --output HEADLESS-1 --custom-mode "$RES"
+echo "Stream ON ($RES)"

@@ -315,30 +315,45 @@ sw_tune = zerolatency
 
 ### Habilitar serviços
 
+Apenas o pipewire sobe com o sistema. Os serviços de display (labwc) **não sobem automaticamente** — são controlados pelos scripts abaixo.
+
 ```bash
-systemctl --user enable labwc-headless.service
 systemctl --user enable pipewire pipewire-pulse wireplumber
 ```
 
 ### Comandos rápidos
 
-Criar `~/.local/bin/stream-on` e `~/.local/bin/stream-off`:
+Copiar os scripts do repo para `~/.local/bin/` e torná-los executáveis:
 
 ```bash
-# stream-on
-#!/bin/sh
-systemctl --user start labwc-headless.service
-echo "Stream ON"
-
-# stream-off
-#!/bin/sh
-systemctl --user stop labwc-headless.service
-echo "Stream OFF"
+cp stream-on stream-off screen-on screen-off hud-on hud-off ~/.local/bin/
+chmod +x ~/.local/bin/stream-on ~/.local/bin/stream-off \
+         ~/.local/bin/screen-on ~/.local/bin/screen-off \
+         ~/.local/bin/hud-on ~/.local/bin/hud-off
 ```
+
+#### stream-on / stream-off (modo headless — Moonlight)
 
 ```bash
-chmod +x ~/.local/bin/stream-on ~/.local/bin/stream-off
+stream-on              # 1920x1080@60 (padrão)
+stream-on 2560x1440@60
+stream-on 1280x720@60
+stream-off
 ```
+
+#### screen-on / screen-off (monitor físico conectado)
+
+```bash
+screen-on              # 1920x1080@60 no primeiro output detectado
+screen-on 2560x1440@60
+screen-on 1920x1080@60 HDMI-A-1   # especificar output manualmente
+screen-off
+
+# Ver outputs disponíveis:
+WAYLAND_DISPLAY=wayland-0 wlr-randr
+```
+
+> `screen-on` para o headless e sobe com DRM (monitor físico). `stream-on` faz o inverso.
 
 ### HUD (MangoHud on/off)
 
@@ -382,14 +397,6 @@ chmod +x ~/.local/bin/hud-on ~/.local/bin/hud-off
 ### Conectar
 
 No Moonlight, adicionar host por `ps6.local` ou pelo IP da máquina.
-
-### Resolução
-
-Padrão é 1280x720. Para mudar:
-
-```bash
-WAYLAND_DISPLAY=wayland-0 wlr-randr --output HEADLESS-1 --custom-mode 1920x1080@60
-```
 
 ---
 

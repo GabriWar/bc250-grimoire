@@ -1,11 +1,9 @@
 [Unit]
-Description=Headless labwc Wayland compositor
+Description=labwc Wayland compositor (monitor físico)
 After=graphical.target
 
 [Service]
 Type=simple
-Environment=WLR_BACKENDS=headless,libinput
-Environment=WLR_HEADLESS_OUTPUTS=1
 Environment=XDG_SESSION_TYPE=wayland
 ExecStart=/usr/bin/labwc
 Restart=on-failure

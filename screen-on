@@ -1,0 +1,27 @@
+#!/bin/sh
+# Uso: screen-on [resolução] [output]
+# Exemplos:
+#   screen-on
+#   screen-on 1920x1080@60
+#   screen-on 2560x1440@60 HDMI-A-1
+#   screen-on 1280x720@60 DP-1
+#
+# Ver outputs disponíveis: WAYLAND_DISPLAY=wayland-0 wlr-randr
+
+RES=${1:-1920x1080@60}
+
+systemctl --user stop labwc-headless.service 2>/dev/null
+systemctl --user start labwc-screen.service
+sleep 1
+
+if [ -n "$2" ]; then
+    WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$2" --mode "$RES"
+else
+    # Detecta o primeiro output disponível automaticamente
+    OUTPUT=$(WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
+    if [ -n "$OUTPUT" ]; then
+        WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUTPUT" --mode "$RES"
+    fi
+fi
+
+echo "Screen ON ($RES)"
