@@ -6,13 +6,20 @@
 #   screen-on 1920x1080@60 HDMI-A-1                   # output específico
 #   screen-on 1920x1080@60 HDMI-A-1 2560x1440@60 DP-1 # múltiplos outputs
 
+# Detecta o socket Wayland ativo (wayland-0 ou wayland-1, etc.)
+WL=${WAYLAND_DISPLAY:-wayland-0}
+
+wlr() {
+    WAYLAND_DISPLAY="$WL" wlr-randr "$@"
+}
+
 if [ "$1" = "list" ]; then
     systemctl --user is-active labwc-screen.service >/dev/null 2>&1 || {
         echo "Compositor não está rodando. Iniciando temporariamente..."
         systemctl --user start labwc-screen.service
         sleep 1
     }
-    WAYLAND_DISPLAY=wayland-0 wlr-randr
+    wlr
     exit 0
 fi
 
@@ -21,24 +28,20 @@ systemctl --user start labwc-screen.service
 sleep 1
 
 if [ -z "$1" ]; then
-    # Sem args: primeiro output detectado, resolução padrão
-    OUTPUT=$(WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
-    [ -n "$OUTPUT" ] && WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUTPUT" --mode 1920x1080@60
+    OUTPUT=$(wlr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
+    [ -n "$OUTPUT" ] && wlr --output "$OUTPUT" --mode 1920x1080@60
     echo "Screen ON (1920x1080@60 @ $OUTPUT)"
 else
-    # Parsear pares de resolução+output: res1 out1 res2 out2 ...
-    RES=""
     while [ -n "$1" ]; do
         RES="$1"
         OUT="$2"
         if [ -z "$OUT" ] || echo "$OUT" | grep -qE '^[0-9]'; then
-            # Sem output especificado, usa o primeiro disponível
-            OUT=$(WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
-            WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUT" --mode "$RES"
+            OUT=$(wlr 2>/dev/null | grep -v '^\s' | head -1 | cut -d' ' -f1)
+            wlr --output "$OUT" --mode "$RES"
             echo "Screen ON ($RES @ $OUT)"
             break
         else
-            WAYLAND_DISPLAY=wayland-0 wlr-randr --output "$OUT" --mode "$RES"
+            wlr --output "$OUT" --mode "$RES"
             echo "Screen ON ($RES @ $OUT)"
             shift 2
         fi
