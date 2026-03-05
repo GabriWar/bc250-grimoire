@@ -9,7 +9,7 @@ Setup completo para usar a BC-250 como PC de gaming headless via Moonlight/Sunsh
 - **VRAM**: 512 MB dedicada + GTT dinâmico (até 14 GB)
 - **Disco**: NVMe 477 GB
 - **OS**: CachyOS Linux (Arch-based)
-- **Limitação**: Sem VCN (hardware de vídeo desativado) — encoding apenas por software
+- **VCN**: Reportado como habilitado a partir de Mesa 25.1 + kernel 6.11 (H.264/H.265/VP9). **Não verificado** — ver seção de testes abaixo
 
 ---
 
@@ -195,8 +195,10 @@ AMD_OVERRIDE_DEVICE_ID=0x731F
 ### Kernel parameters
 
 ```
-quiet mitigations=off
+quiet mitigations=off amdgpu.sg_display=0
 ```
+
+> `amdgpu.sg_display=0` — corrige hangs de display na inicialização (raro, mas ocorre em algumas configurações)
 
 ---
 
@@ -331,7 +333,7 @@ sw_preset = ultrafast
 sw_tune = zerolatency
 ```
 
-> **Sem VCN**: A BC-250 não tem hardware de encoding. `encoder = software` (libx264) é a única opção. O preset `ultrafast` usa ~40% CPU durante stream. Para melhor qualidade com mais CPU, use `superfast` (~55%) ou `faster`.
+> `encoder = software` (libx264) é a opção segura e confirmada. Hardware encoding (VCN) pode funcionar com Mesa 25.1 + kernel 6.11 — ver seção de testes. O preset `ultrafast` usa ~40% CPU durante stream. Para melhor qualidade com mais CPU, use `superfast` (~55%) ou `faster`.
 
 ### Habilitar serviços
 
@@ -750,6 +752,37 @@ systemctl status earlyoom
 | PipeWire | ~1% | ~40 MB |
 | **Total (sem Steam)** | ~7% | ~400 MB |
 | Steam (aberto) | ~10% | ~2 GB |
+
+---
+
+## Testes não verificados
+
+Funcionalidades reportadas pela comunidade mas **não confirmadas** neste hardware. Contribuições bem-vindas.
+
+### VCN — Hardware decode/encode
+
+Reportado como funcional a partir de **Mesa 25.1 + kernel 6.11**. Suporte a H.264, H.265 e VP9 decode; H.264 e H.265 encode.
+
+```bash
+# Verificar se VCN aparece nos logs do kernel
+dmesg | grep -i vcn
+
+# Checar VA-API
+vainfo 2>&1
+
+# Esperado se funcionar:
+# vainfo: VA-API version: 1.x
+# VAEntrypointVLD   (decode)
+# VAEntrypointEncSlice (encode)
+
+# Testar decode com hardware
+ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128   -i input.mp4 -f null - 2>&1 | grep -i "vaapi\|vcn\|error"
+
+# Testar encode com hardware
+ffmpeg -vaapi_device /dev/dri/renderD128 -i input.mp4   -vf 'format=nv12,hwupload' -c:v h264_vaapi output.mp4
+```
+
+Se funcionar, atualizar `encoder` no `sunshine.conf` para `vaapi` e remover o aviso de VCN desta seção.
 
 ---
 
