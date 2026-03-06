@@ -142,19 +142,21 @@ cat /sys/class/drm/card0/device/pp_dpm_sclk
 
 Configurar UMA Frame Buffer Size para **512 MB** (modo dinâmico). A GPU aloca mais conforme necessário.
 
-### Expandir GTT para 14 GB
+### Expandir GTT para 12 GB
+
+> **Por que 12 GB e não 14 GB?** Alocações GTT muito grandes (14+ GB) causam `TLB flush failed` e hard lock quando a GPU tenta alocar muita memória de uma vez (ex: ComfyUI carregando modelo). 12 GB é o sweet spot — máxima VRAM útil sem crashar.
 
 ```bash
 # /etc/modprobe.d/amdgpu-mem.conf
-options amdgpu no_system_mem_limit=1 gttsize=14750
+options amdgpu no_system_mem_limit=1 gttsize=12288
 
 # /etc/modprobe.d/ttm-mem-limit.conf
-options ttm pages_limit=4194304 page_pool_size=4194304
+options ttm pages_limit=3145728 page_pool_size=3145728
 ```
 
 Ou via kernel parameters (alternativo ao modprobe):
 ```
-amdgpu.gttsize=14750 ttm.pages_limit=4194304 ttm.page_pool_size=4194304
+amdgpu.gttsize=12288 ttm.pages_limit=3145728 ttm.page_pool_size=3145728
 ```
 
 Rebuild initramfs:
@@ -167,7 +169,7 @@ sudo mkinitcpio -P
 Verificar após reboot:
 ```bash
 vulkaninfo 2>&1 | grep -A3 "memoryHeaps\[0\]"
-# Deve mostrar ~14.5 GB
+# Deve mostrar ~12 GB
 ```
 
 ---
@@ -215,8 +217,10 @@ AMD_OVERRIDE_DEVICE_ID=0x731F
 ### Kernel parameters
 
 ```
-quiet mitigations=off amdgpu.sg_display=0
+quiet mitigations=off nmi_watchdog=1 amdgpu.sg_display=0
 ```
+
+> **Não usar `nowatchdog`** — o watchdog de hardware (SP5100 TCO) é essencial pra recuperar de hard locks causados pelo driver amdgpu. Zero impacto em performance.
 
 > `amdgpu.sg_display=0` — só obrigatório em kernels < 6.10. Em kernels modernos é opcional mas inofensivo. `mitigations=off` dá +10-18 FPS (desativa mitigações Spectre/Meltdown — só usar em sistema dedicado a gaming).
 
@@ -363,15 +367,54 @@ Apenas o pipewire sobe com o sistema. Os serviços de display (labwc) **não sob
 systemctl --user enable pipewire pipewire-pulse wireplumber
 ```
 
+### Gamescope (compositor standalone para gaming)
+
+O gamescope é o compositor da SteamOS — feito especificamente para gaming headless. Substitui o labwc com menos overhead, controle de resolução e FSR embutido.
+
+```bash
+sudo pacman -S gamescope lib32-gamescope
+```
+
+#### Serviço (`~/.config/systemd/user/gamescope-session.service`)
+
+```ini
+[Unit]
+Description=Gamescope compositor with Steam Big Picture
+After=graphical.target
+Conflicts=labwc-headless.service
+
+[Service]
+Type=simple
+Environment=XDG_SESSION_TYPE=wayland
+ExecStart=/usr/bin/gamescope -W 1280 -H 720 -w 1280 -h 720 -r 60 -f --backend headless -- steam -bigpicture -steamos
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+#### game-on / game-off (Steam Big Picture via gamescope)
+
+```bash
+game-on              # 1280x720@60 (padrão)
+game-on 1080         # 1920x1080@60
+game-on 900          # 1600x900@60
+game-off
+```
+
+> `game-on` para o labwc headless e sobe o gamescope com Steam Big Picture. Ideal para streaming via Sunshine/Moonlight.
+
 ### Comandos rápidos
 
 Copiar os scripts do repo para `~/.local/bin/` e torná-los executáveis:
 
 ```bash
-cp stream-on stream-off screen-on screen-off hud-on hud-off ~/.local/bin/
+cp stream-on stream-off screen-on screen-off hud-on hud-off game-on game-off ~/.local/bin/
 chmod +x ~/.local/bin/stream-on ~/.local/bin/stream-off \
          ~/.local/bin/screen-on ~/.local/bin/screen-off \
-         ~/.local/bin/hud-on ~/.local/bin/hud-off
+         ~/.local/bin/hud-on ~/.local/bin/hud-off \
+         ~/.local/bin/game-on ~/.local/bin/game-off
 ```
 
 #### stream-on / stream-off (modo headless — Moonlight)
@@ -691,6 +734,33 @@ O arquivo configura:
 - `kernel.panic = 10` — reboot 10s após kernel panic (driver AMD crashou, etc.)
 - `kernel.panic_on_oops = 1` — trata kernel oops como panic (evita sistema "meio vivo")
 - `kernel.hung_task_panic = 1` — reboot se processo do kernel travar por 120s
+
+### Watchdog de hardware (SP5100 TCO)
+
+O watchdog de hardware é um timer no chipset AMD que força reboot em hard locks (quando nem o kernel responde). **Não adicionar `nowatchdog` nos kernel parameters.**
+
+Verificar se está ativo:
+```bash
+dmesg | grep -i watchdog
+# Deve mostrar: sp5100_tco ou similar
+```
+
+### NMI Watchdog (Non-Maskable Interrupt)
+
+O NMI watchdog detecta hard locks que nem o SP5100 consegue pegar — quando o CPU trava em um loop que o watchdog de hardware não percebe. Usa um contador PMU (Performance Monitoring Unit) do CPU pra detectar se o sistema parou de responder.
+
+O CachyOS desabilita por padrão (`nmi_watchdog=0`) por performance. Custo de ativar: ~1% CPU.
+
+Adicionar ao kernel cmdline (`/boot/refind_linux.conf`):
+```
+nmi_watchdog=1
+```
+
+Verificar:
+```bash
+cat /proc/sys/kernel/nmi_watchdog
+# Deve mostrar: 1
+```
 
 ### systemd watchdog
 

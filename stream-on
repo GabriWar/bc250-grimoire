@@ -8,8 +8,11 @@
 
 RES=${1:-1920x1080@60}
 
+systemctl --user stop gamescope-session.service 2>/dev/null
 systemctl --user stop labwc-screen.service 2>/dev/null
 systemctl --user start labwc-headless.service
+sleep 1
+systemctl --user start sunshine.service
 sleep 1
 WAYLAND_DISPLAY=wayland-0 wlr-randr --output HEADLESS-1 --custom-mode "$RES"
 echo "Stream ON ($RES)"

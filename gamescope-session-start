@@ -1,0 +1,5 @@
+#!/bin/sh
+# Inicia Sunshine + Steam dentro do gamescope
+sunshine &
+sleep 2
+steam -bigpicture -steamos
