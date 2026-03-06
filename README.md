@@ -367,54 +367,15 @@ Apenas o pipewire sobe com o sistema. Os serviços de display (labwc) **não sob
 systemctl --user enable pipewire pipewire-pulse wireplumber
 ```
 
-### Gamescope (compositor standalone para gaming)
-
-O gamescope é o compositor da SteamOS — feito especificamente para gaming headless. Substitui o labwc com menos overhead, controle de resolução e FSR embutido.
-
-```bash
-sudo pacman -S gamescope lib32-gamescope
-```
-
-#### Serviço (`~/.config/systemd/user/gamescope-session.service`)
-
-```ini
-[Unit]
-Description=Gamescope compositor with Steam Big Picture
-After=graphical.target
-Conflicts=labwc-headless.service
-
-[Service]
-Type=simple
-Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/usr/bin/gamescope -W 1280 -H 720 -w 1280 -h 720 -r 60 -f --backend headless -- steam -bigpicture -steamos
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-```
-
-#### game-on / game-off (Steam Big Picture via gamescope)
-
-```bash
-game-on              # 1280x720@60 (padrão)
-game-on 1080         # 1920x1080@60
-game-on 900          # 1600x900@60
-game-off
-```
-
-> `game-on` para o labwc headless e sobe o gamescope com Steam Big Picture. Ideal para streaming via Sunshine/Moonlight.
-
 ### Comandos rápidos
 
 Copiar os scripts do repo para `~/.local/bin/` e torná-los executáveis:
 
 ```bash
-cp stream-on stream-off screen-on screen-off hud-on hud-off game-on game-off ~/.local/bin/
+cp stream-on stream-off screen-on screen-off hud-on hud-off ~/.local/bin/
 chmod +x ~/.local/bin/stream-on ~/.local/bin/stream-off \
          ~/.local/bin/screen-on ~/.local/bin/screen-off \
-         ~/.local/bin/hud-on ~/.local/bin/hud-off \
-         ~/.local/bin/game-on ~/.local/bin/game-off
+         ~/.local/bin/hud-on ~/.local/bin/hud-off
 ```
 
 #### stream-on / stream-off (modo headless — Moonlight)

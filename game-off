@@ -1,3 +1,0 @@
-#!/bin/sh
-systemctl --user stop gamescope-session.service 2>/dev/null
-echo "Game OFF"
