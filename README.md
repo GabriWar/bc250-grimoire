@@ -239,10 +239,14 @@ AMD_VULKAN_ICD=RADV
 RADV_DEBUG=nohiz,nocompute
 MESA_LOADER_DRIVER_OVERRIDE=zink
 AMD_OVERRIDE_DEVICE_ID=0x731F
+HSA_OVERRIDE_GFX_VERSION=10.1.0
+RADV_PERFTEST=sam
 MESA_SHADER_CACHE_MAX_SIZE=4G
 ```
 
 > `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F
+HSA_OVERRIDE_GFX_VERSION=10.1.0
+RADV_PERFTEST=sam
 MESA_SHADER_CACHE_MAX_SIZE=4G` faz o Vulkan/DXVK identificar como Navi10.
 
 ### Unified heap (`/etc/drirc`)
@@ -260,7 +264,8 @@ MESA_SHADER_CACHE_MAX_SIZE=4G` faz o Vulkan/DXVK identificar como Navi10.
 ### Kernel parameters
 
 ```
-quiet mitigations=off nmi_watchdog=1 amdgpu.sg_display=0
+quiet mitigations=off nmi_watchdog=1 amdgpu.sg_display=0 \
+amdgpu.ppfeaturemask=0xfffd7fff amdgpu.vm_fragment_size=9
 ```
 
 > **Não usar `nowatchdog`** — o watchdog de hardware (SP5100 TCO) é essencial pra recuperar de hard locks causados pelo driver amdgpu. Zero impacto em performance.
