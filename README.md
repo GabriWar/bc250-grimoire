@@ -700,10 +700,45 @@ O arquivo configura:
 
 O watchdog de hardware é um timer no chipset AMD que força reboot em hard locks (quando nem o kernel responde). **Não adicionar `nowatchdog` nos kernel parameters.**
 
-Verificar se está ativo:
+> ⚠️ O `sp5100_tco` vem **blacklisted por padrão** no CachyOS (`/usr/lib/modprobe.d/blacklist.conf`). O `blacklist` do kmod é aditivo e não pode ser overridden por outro arquivo em `/etc/modprobe.d/`. A solução é um serviço systemd que carrega o módulo no boot:
+
+```bash
+# /etc/systemd/system/sp5100-watchdog.service
+[Unit]
+Description=Load SP5100 TCO watchdog module
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe sp5100_tco
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
+```
+
+```bash
+sudo systemctl enable sp5100-watchdog.service
+```
+
+Configurar o systemd pra alimentar o watchdog:
+```bash
+# /etc/systemd/system.conf — adicionar:
+WatchdogDevice=/dev/watchdog0
+```
+
+Verificar se está ativo após reboot:
 ```bash
 dmesg | grep -i watchdog
 # Deve mostrar: sp5100_tco ou similar
+
+cat /sys/class/watchdog/watchdog0/identity
+# Deve mostrar: SP5100 TCO timer
+
+cat /sys/class/watchdog/watchdog0/status
+# 0x8100 = ativo e sendo alimentado pelo systemd
 ```
 
 ### NMI Watchdog (Non-Maskable Interrupt)
