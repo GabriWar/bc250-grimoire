@@ -142,21 +142,25 @@ cat /sys/class/drm/card0/device/pp_dpm_sclk
 
 Configurar UMA Frame Buffer Size para **512 MB** (modo dinâmico). A GPU aloca mais conforme necessário.
 
-### Expandir GTT para 12 GB
+### Expandir GTT para 14 GB
 
-> **Por que 12 GB e não 14 GB?** Alocações GTT muito grandes (14+ GB) causam `TLB flush failed` e hard lock quando a GPU tenta alocar muita memória de uma vez (ex: ComfyUI carregando modelo). 12 GB é o sweet spot — máxima VRAM útil sem crashar.
+> **Por que 14 GB?** Com o ajuste correto de memória do sistema (`no_system_mem_limit=1`), 14 GB permite rodar modelos de IA maiores (SDXL, LLMs) sem swapping excessivo. Se notar crashes constantes em tarefas compute, reduza para 12 GB.
 
 ```bash
 # /etc/modprobe.d/amdgpu-mem.conf
-options amdgpu no_system_mem_limit=1 gttsize=12288
-
-# /etc/modprobe.d/ttm-mem-limit.conf
-options ttm pages_limit=3145728 page_pool_size=3145728
+options amdgpu no_system_mem_limit=1 gttsize=14336
 ```
 
-Ou via kernel parameters (alternativo ao modprobe):
-```
-amdgpu.gttsize=12288 ttm.pages_limit=3145728 ttm.page_pool_size=3145728
+### Swap no NVMe (Obrigatório para GTT > 12GB)
+
+Como o GTT de 14 GB usa quase toda a RAM física (16 GB), é **essencial** ter um swap file grande no NVMe para evitar que o sistema trave (OOM) em picos de uso. Recomendado: **16 GB a 32 GB**.
+
+```bash
+sudo fallocate -l 32G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo "/swapfile none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
 ```
 
 Rebuild initramfs:
@@ -164,17 +168,54 @@ Rebuild initramfs:
 sudo mkinitcpio -P
 ```
 
-> **Opcional** — pode causar instabilidade em alguns casos. Testar e reverter se necessário (remover o arquivo e limpar `/etc/environment`).
-
 Verificar após reboot:
 ```bash
 vulkaninfo 2>&1 | grep -A3 "memoryHeaps\[0\]"
-# Deve mostrar ~12 GB
+# Deve mostrar ~14.5 GB
 ```
 
 ---
 
-## 4. RADV e Performance
+## 4. Tuning de Sistema e Performance
+
+### Power Profile (Performance)
+
+```bash
+powerprofilesctl set performance
+```
+
+### Sysctl e Memória (`/etc/sysctl.d/99-bc250-tuning.conf`)
+
+Otimizações para reduzir latência e melhorar o uso da RAM compartilhada:
+
+```ini
+vm.swappiness=60
+vm.vfs_cache_pressure=50
+vm.dirty_ratio=20
+vm.dirty_background_ratio=10
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+```
+
+### Audio Latency (PipeWire)
+
+Reduz o atraso do áudio no stream:
+```bash
+# /etc/environment
+PIPEWIRE_QUANTUM=1024/48000
+```
+
+### Transparent Huge Pages (THP)
+
+Melhora performance em PyTorch/ROCm:
+```bash
+echo "madvise" | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+echo "1" | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
+```
+
+---
+
+## 5. RADV e Performance
 
 ### Navi10 Spoof (fix de detecção de GPU) — Opcional
 
@@ -198,9 +239,11 @@ AMD_VULKAN_ICD=RADV
 RADV_DEBUG=nohiz,nocompute
 MESA_LOADER_DRIVER_OVERRIDE=zink
 AMD_OVERRIDE_DEVICE_ID=0x731F
+MESA_SHADER_CACHE_MAX_SIZE=4G
 ```
 
-> `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F` faz o Vulkan/DXVK identificar como Navi10.
+> `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F
+MESA_SHADER_CACHE_MAX_SIZE=4G` faz o Vulkan/DXVK identificar como Navi10.
 
 ### Unified heap (`/etc/drirc`)
 
@@ -355,6 +398,14 @@ output_name = 0
 
 sw_preset = ultrafast
 sw_tune = zerolatency
+
+### Sunshine Real-time Priority
+
+Permite que o Sunshine tenha prioridade de CPU sobre o jogo, garantindo stream fluido mesmo em 100% load:
+
+```bash
+sudo setcap cap_sys_nice+ep /usr/bin/sunshine
+```
 ```
 
 > Sem VCN: A BC-250 não tem hardware de encoding (firmware bloqueado pela Sony). `encoder = software` (libx264) é a única opção. O preset `ultrafast` usa ~40% CPU durante stream. Para melhor qualidade com mais CPU, use `superfast` (~55%) ou `faster`.
@@ -462,15 +513,19 @@ Reiniciar Steam. Selecionar em cada jogo: Properties → Compatibility → GE-Pr
 ## 8. Serviços desativados (otimização)
 
 ```bash
-# Sistema
-sudo systemctl disable --now lightdm accounts-daemon power-profiles-daemon
-sudo systemctl mask upower
+# Sistema (Mascarar para evitar subir no boot)
+sudo systemctl mask lightdm accounts-daemon power-profiles-daemon upower
+sudo systemctl mask plymouth-start.service plymouth-quit.service \
+  plymouth-quit-wait.service plymouth-read-write.service \
+  lvm2-monitor.service earlyoom.service
 
-# User
+# User (Mascarar serviços de background desnecessários)
 systemctl --user mask gvfs-daemon gvfs-afc-volume-monitor gvfs-gphoto2-volume-monitor \
   gvfs-mtp-volume-monitor gvfs-udisks2-volume-monitor gvfs-metadata \
   at-spi-dbus-bus xdg-document-portal
 ```
+
+> **Nota**: `avahi-daemon` e `tailscaled` devem ser mantidos ativos para Moonlight/Sunshine e acesso remoto. `earlyoom` foi desativado para evitar que mate processos de IA pesados em picos de memória.
 
 ---
 
