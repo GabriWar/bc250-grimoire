@@ -215,6 +215,45 @@ echo "1" | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
 
 ---
 
+## 4.1 Tuning Avançado (Experimental — Estabilidade e Latência)
+
+Configurações de baixo nível para reduzir micro-stutters e prevenir `ring timeout` no driver AMD.
+
+### Kernel Parameters (`/boot/refind_linux.conf` ou GRUB)
+
+```
+processor.max_cstate=1 split_lock_detect=off pcie_aspm=off transparent_hugepage=madvise
+```
+
+> `processor.max_cstate=1` e `pcie_aspm=off` mantêm o CPU e o barramento PCIe ativos, reduzindo drasticamente a latência de "wake-up".
+
+### Driver AMD Advanced (`/etc/modprobe.d/amdgpu-advanced.conf`)
+
+```bash
+options amdgpu sched_hw_submission=2 gpu_recovery=1 audio=0
+```
+
+> `sched_hw_submission=2` permite que o hardware gerencie mais comandos simultaneamente, essencial para evitar crashes durante carregamento de modelos de IA. `gpu_recovery=1` tenta resetar apenas o driver se a GPU travar, evitando reboot forçado.
+
+### Sysctl Adicional (`/etc/sysctl.d/99-bc250-tuning.conf`)
+
+```ini
+kernel.sched_autogroup_enabled=0
+vm.stat_interval=10
+net.ipv4.tcp_fastopen=3
+net.core.netdev_max_backlog=5000
+```
+
+> `net.core.netdev_max_backlog=5000` é vital para streamings de alto bitrate (4K/120Hz) sem perda de pacotes.
+
+### NVMe I/O MQ (`/etc/modprobe.d/scsi-mq.conf`)
+
+```bash
+options scsi_mod use_blk_mq=1
+```
+
+---
+
 ## 5. RADV e Performance
 
 ### Navi10 Spoof (fix de detecção de GPU) — Opcional
