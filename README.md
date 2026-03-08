@@ -142,14 +142,19 @@ cat /sys/class/drm/card0/device/pp_dpm_sclk
 
 Configurar UMA Frame Buffer Size para **512 MB** (modo dinâmico). A GPU aloca mais conforme necessário.
 
-### Expandir GTT para 14 GB
+### Expandir GTT para 12 GB
 
-> **Por que 14 GB?** Com o ajuste correto de memória do sistema (`no_system_mem_limit=1`), 14 GB permite rodar modelos de IA maiores (SDXL, LLMs) sem swapping excessivo. Se notar crashes constantes em tarefas compute, reduza para 12 GB.
+> **Por que 12 GB e não 14 GB?** Alocações GTT muito grandes (14+ GB) causam `TLB flush failed` e hard lock quando a GPU tenta alocar muita memória de uma vez (ex: ComfyUI carregando modelo). 12 GB é o sweet spot — máxima VRAM útil sem crashar. Com 16 GB de RAM total, 14 GB de GTT deixa só 2 GB pro sistema.
 
 ```bash
 # /etc/modprobe.d/amdgpu-mem.conf
-options amdgpu no_system_mem_limit=1 gttsize=14336
+options amdgpu no_system_mem_limit=1 gttsize=12288
+
+# /etc/modprobe.d/ttm-mem-limit.conf
+options ttm pages_limit=3145728 page_pool_size=3145728
 ```
+
+> ⚠️ **Experimental (instável):** GTT 14 GB (`gttsize=14336`) permite rodar modelos de IA maiores, mas requer swap de 32 GB e pode causar parity errors/hard locks sob carga compute. Usar por conta e risco.
 
 ### Swap no NVMe (Obrigatório para GTT > 12GB)
 
@@ -291,15 +296,14 @@ AMD_VULKAN_ICD=RADV
 RADV_DEBUG=nohiz,nocompute
 MESA_LOADER_DRIVER_OVERRIDE=zink
 AMD_OVERRIDE_DEVICE_ID=0x731F
-HSA_OVERRIDE_GFX_VERSION=10.1.0
-RADV_PERFTEST=sam
-MESA_SHADER_CACHE_MAX_SIZE=4G
 ```
 
-> `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F
-HSA_OVERRIDE_GFX_VERSION=10.1.0
-RADV_PERFTEST=sam
-MESA_SHADER_CACHE_MAX_SIZE=4G` faz o Vulkan/DXVK identificar como Navi10.
+> `RADV_DEBUG=nohiz` desativa HIZ (problemático na BC-250). `nocompute` previne crashes com compute shaders — no **Mesa 25.1+** já é desabilitado automaticamente, mas não faz mal manter. `AMD_OVERRIDE_DEVICE_ID=0x731F` faz o Vulkan/DXVK identificar como Navi10.
+
+> ⚠️ **Experimental (instável):** As seguintes variáveis podem causar parity errors/hard locks:
+> - `HSA_OVERRIDE_GFX_VERSION=10.1.0` — muda o target ROCm pra gfx1010 (era 10.3.0). Kernels pro target errado podem causar acessos de memória incorretos.
+> - `RADV_PERFTEST=sam` — habilita Smart Access Memory/resizable BAR. Mais pressão no barramento CPU↔VRAM.
+> - `MESA_SHADER_CACHE_MAX_SIZE=4G` — cache grande, inofensivo mas desnecessário.
 
 ### Unified heap (`/etc/drirc`)
 
@@ -316,13 +320,16 @@ MESA_SHADER_CACHE_MAX_SIZE=4G` faz o Vulkan/DXVK identificar como Navi10.
 ### Kernel parameters
 
 ```
-quiet mitigations=off nmi_watchdog=1 amdgpu.sg_display=0 \
-amdgpu.ppfeaturemask=0xfffd7fff amdgpu.vm_fragment_size=9
+quiet mitigations=off nmi_watchdog=1 amdgpu.sg_display=0
 ```
 
 > **Não usar `nowatchdog`** — o watchdog de hardware (SP5100 TCO) é essencial pra recuperar de hard locks causados pelo driver amdgpu. Zero impacto em performance.
 
 > `amdgpu.sg_display=0` — só obrigatório em kernels < 6.10. Em kernels modernos é opcional mas inofensivo. `mitigations=off` dá +10-18 FPS (desativa mitigações Spectre/Meltdown — só usar em sistema dedicado a gaming).
+
+> ⚠️ **Experimental (instável):** Os seguintes kernel params podem causar parity errors/hard locks:
+> - `amdgpu.ppfeaturemask=0xfffd7fff` — habilita overclocking features do driver. Muda como a GPU acessa a VRAM.
+> - `amdgpu.vm_fragment_size=9` — muda tamanho de páginas VM da GPU. Pode estressar o controlador de memória.
 
 ---
 
@@ -574,7 +581,7 @@ Reiniciar Steam. Selecionar em cada jogo: Properties → Compatibility → GE-Pr
 sudo systemctl mask lightdm accounts-daemon power-profiles-daemon upower
 sudo systemctl mask plymouth-start.service plymouth-quit.service \
   plymouth-quit-wait.service plymouth-read-write.service \
-  lvm2-monitor.service earlyoom.service
+  lvm2-monitor.service
 
 # User (Mascarar serviços de background desnecessários)
 systemctl --user mask gvfs-daemon gvfs-afc-volume-monitor gvfs-gphoto2-volume-monitor \
@@ -582,7 +589,9 @@ systemctl --user mask gvfs-daemon gvfs-afc-volume-monitor gvfs-gphoto2-volume-mo
   at-spi-dbus-bus xdg-document-portal
 ```
 
-> **Nota**: `avahi-daemon` e `tailscaled` devem ser mantidos ativos para Moonlight/Sunshine e acesso remoto. `earlyoom` foi desativado para evitar que mate processos de IA pesados em picos de memória.
+> **Nota**: `avahi-daemon` e `tailscaled` devem ser mantidos ativos para Moonlight/Sunshine e acesso remoto.
+
+> ⚠️ **Experimental (instável):** Mascarar `earlyoom.service` permite que processos de IA pesados usem mais memória sem serem mortos, mas remove a proteção contra OOM — o sistema pode travar completamente ao ficar sem RAM.
 
 ---
 
