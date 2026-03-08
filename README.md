@@ -237,12 +237,25 @@ options amdgpu sched_hw_submission=2 gpu_recovery=1 audio=0
 
 ### Sysctl Adicional (`/etc/sysctl.d/99-bc250-tuning.conf`)
 
+Configurações de rede, memória e agendador para performance máxima:
+
 ```ini
 kernel.sched_autogroup_enabled=0
 vm.stat_interval=10
 net.ipv4.tcp_fastopen=3
 net.core.netdev_max_backlog=5000
+
+# Extreme Network Tuning (Streaming focus)
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.ipv4.tcp_low_latency = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_mtu_probing = 1
 ```
+
+> `net.core.rmem_max = 67108864` e os buffers de 64MB garantem zero frame drops em transmissões 4K/120Hz de alto bitrate. `tcp_low_latency` prioriza velocidade sobre eficiência para inputs de games.
 
 > `net.core.netdev_max_backlog=5000` é vital para streamings de alto bitrate (4K/120Hz) sem perda de pacotes.
 
